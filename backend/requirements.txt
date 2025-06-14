@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+python-multipart
+numpy
+onnxruntime
+pillow
+scipy
+pydantic
+pydantic-settings
+torch
+torchvision
+torchaudio
+facenet-pytorch
+speechbrain
+onnx
+transformers
+mediapipe

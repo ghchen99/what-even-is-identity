@@ -192,3 +192,13 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Project-specific ignores
+# Backend data storage (contains user biometric data)
+backend/data/
+
+# ONNX model files (large binary files)
+backend/models/*.onnx
+
+# Test data (may contain personal biometric samples)
+test-user/
