@@ -295,8 +295,8 @@ class BiometricService:
             # 3. Extract features (MFCC, spectrogram)
             # 4. Format for model input
             
-            # Mock feature vector
-            mock_features = np.random.normal(0, 1, (1, 80, 300)).astype(np.float32)
+            # Mock feature vector - shape: [batch, time_steps, features]
+            mock_features = np.random.normal(0, 1, (1, 300, 80)).astype(np.float32)
             return mock_features
             
         except Exception as e:
