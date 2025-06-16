@@ -83,6 +83,7 @@ export default function BiometricEnrollment({
     setError('');
   };
 
+
   const enrollmentProgress = () => {
     let progress = 0;
     if (faceImage) progress += 40;
@@ -182,7 +183,7 @@ export default function BiometricEnrollment({
             <div className="text-center">
               <h3 className="text-lg font-medium mb-2">Record Your Voice</h3>
               <p className="text-sm text-gray-600 mb-4">
-                Speak clearly for 3-5 seconds. Say something like "Hello, this is my voice"
+                Speak clearly for a few seconds to register your voice
               </p>
             </div>
             <div className="flex justify-center">

@@ -230,7 +230,7 @@ export default function Home() {
             Biometric Identity System - Demo Application
           </p>
           <p>
-            Face recognition powered by FaceNet | Voice recognition powered by X-Vector
+            Face recognition powered by FaceNet | Voice recognition powered by ECAPA-TDNN
           </p>
         </div>
       </div>

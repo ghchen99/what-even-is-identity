@@ -170,6 +170,7 @@ export default function VoiceRecorder({
           </Alert>
         )}
 
+
         {/* Recording Status */}
         <div className="text-center space-y-2">
           <div className="text-2xl font-mono">
@@ -220,10 +221,18 @@ export default function VoiceRecorder({
         </div>
 
         {/* Instructions */}
-        <div className="text-sm text-gray-500 text-center">
-          {!isRecording && !audioURL && 'Click "Start Recording" to begin'}
-          {isRecording && 'Speak clearly into your microphone'}
-          {audioURL && 'Use the audio player to review your recording'}
+        <div className="text-sm text-gray-500 text-center space-y-1">
+          {!isRecording && !audioURL && (
+            <div>Click "Start Recording" to begin voice capture</div>
+          )}
+          {isRecording && (
+            <div className="font-medium text-blue-600">
+              Speak clearly into your microphone
+            </div>
+          )}
+          {audioURL && (
+            <div>Review your recording before submitting</div>
+          )}
         </div>
       </CardContent>
     </Card>

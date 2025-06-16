@@ -150,6 +150,7 @@ export default function BiometricVerification({
     setIsActive(false);
   };
 
+
   const successRate = totalAttempts > 0 ? (successCount / totalAttempts) * 100 : 0;
 
   return (
@@ -232,11 +233,16 @@ export default function BiometricVerification({
 
           {/* Voice Section */}
           <div className="space-y-4">
-            <h3 className="text-lg font-medium text-center">Voice Sample</h3>
+            <div className="text-center">
+              <h3 className="text-lg font-medium">Voice Sample</h3>
+              <p className="text-sm text-gray-600 mb-2">
+                Speak clearly to verify your identity
+              </p>
+            </div>
             <VoiceRecorder
               onRecordingComplete={handleVoiceCapture}
               onError={handleError}
-              options={{ maxDuration: 5 }}
+              options={{ maxDuration: 10 }}
             />
           </div>
 

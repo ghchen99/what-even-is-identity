@@ -28,12 +28,16 @@ class Settings(BaseSettings):
     
     # Model settings
     FACE_MODEL_PATH: str = "facenet.onnx"
-    VOICE_MODEL_PATH: str = "xvector.onnx"
+    VOICE_MODEL_PATH: str = "ecapa_tdnn.onnx"
     
     # Biometric settings  
-    DEFAULT_SIMILARITY_THRESHOLD: float = 0.8
+    DEFAULT_SIMILARITY_THRESHOLD: float = 0.85  # Increased for ECAPA-TDNN
     FACE_WEIGHT: float = 0.6
     VOICE_WEIGHT: float = 0.4
+    
+    # ECAPA-TDNN specific thresholds
+    VOICE_SAME_SPEAKER_THRESHOLD: float = 0.95  # 95%+ for same speaker
+    VOICE_DIFFERENT_SPEAKER_THRESHOLD: float = 0.75  # Below 75% for different speakers
     
     # Cache settings
     CACHE_TTL: int = 3600  # 1 hour

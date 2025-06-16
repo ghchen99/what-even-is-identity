@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Simple X-Vector Voice Recognition Test Script
-This script tests the x-vector model with minimal preprocessing to understand what it actually expects.
+ECAPA-TDNN Voice Recognition Test Script
+This script tests the ECAPA-TDNN speaker model with proper MFCC preprocessing.
 """
 
 import numpy as np
@@ -22,13 +22,13 @@ def load_audio_simple(audio_path, target_sr=16000):
     
     return audio, sr
 
-def preprocess_for_xvector_v1(audio, sr=16000):
-    """Version 1: Minimal preprocessing - just MFCC features"""
-    # Extract MFCC features (common for x-vector models)
+def preprocess_for_ecapa_tdnn(audio, sr=16000):
+    """ECAPA-TDNN preprocessing - 80 MFCC features"""
+    # Extract MFCC features (80 features for ECAPA-TDNN)
     mfccs = librosa.feature.mfcc(
         y=audio, 
         sr=sr, 
-        n_mfcc=13,  # Standard number of MFCC coefficients
+        n_mfcc=80,  # ECAPA-TDNN expects 80 MFCC coefficients
         n_fft=512,
         hop_length=160,
         win_length=400
@@ -43,55 +43,9 @@ def preprocess_for_xvector_v1(audio, sr=16000):
     print(f"MFCC features shape: {features.shape}")
     return features
 
-def preprocess_for_xvector_v2(audio, sr=16000):
-    """Version 2: Log-mel spectrogram (what we're currently using)"""
-    # Mel spectrogram
-    mel_spec = librosa.feature.melspectrogram(
-        y=audio,
-        sr=sr,
-        n_fft=512,
-        hop_length=160,
-        win_length=400,
-        n_mels=80,
-        fmin=0,
-        fmax=sr // 2,
-        power=2.0
-    )
-    
-    # Convert to log scale
-    log_mel_spec = librosa.power_to_db(mel_spec, ref=np.max)
-    
-    # Transpose to time x features format
-    log_mel_spec = log_mel_spec.T
-    
-    # Normalize
-    mean = np.mean(log_mel_spec, axis=0, keepdims=True)
-    std = np.std(log_mel_spec, axis=0, keepdims=True)
-    log_mel_spec = (log_mel_spec - mean) / (std + 1e-8)
-    
-    # Add batch dimension
-    features = np.expand_dims(log_mel_spec, axis=0).astype(np.float32)
-    
-    print(f"Log-mel features shape: {features.shape}")
-    return features
 
-def preprocess_for_xvector_v3(audio, sr=16000):
-    """Version 3: Raw spectrogram"""
-    # Simple spectrogram
-    stft = librosa.stft(audio, n_fft=512, hop_length=160, win_length=400)
-    magnitude = np.abs(stft)
-    
-    # Transpose to time x features
-    features = magnitude.T
-    
-    # Add batch dimension
-    features = np.expand_dims(features, axis=0).astype(np.float32)
-    
-    print(f"Spectrogram features shape: {features.shape}")
-    return features
-
-def run_xvector_model(features, model_path):
-    """Run the x-vector model and return embedding"""
+def run_ecapa_tdnn_model(features, model_path):
+    """Run the ECAPA-TDNN model and return embedding"""
     try:
         # Load model
         session = ort.InferenceSession(str(model_path), providers=['CPUExecutionProvider'])
@@ -152,11 +106,11 @@ def create_synthetic_voice(duration=3.0, sr=16000, freq_base=200):
     return signal
 
 def main():
-    print("🎤 X-Vector Voice Recognition Test")
+    print("🎤 ECAPA-TDNN Voice Recognition Test")
     print("=" * 50)
     
     # Paths
-    model_path = Path("backend/models/xvector.onnx")
+    model_path = Path("backend/models/ecapa_tdnn.onnx")
     audio_dir = Path("backend/tests/fixtures/voice")
     
     if not model_path.exists():
@@ -188,8 +142,8 @@ def main():
     
     print(f"Total audio sources: {len(all_audio_sources)}")
     
-    # Test only the working method (Log-Mel)
-    print(f"\n🧪 Testing Log-Mel Preprocessing")
+    # Test ECAPA-TDNN preprocessing
+    print(f"\n🧪 Testing ECAPA-TDNN MFCC Preprocessing")
     print("-" * 50)
     
     embeddings = []
@@ -208,11 +162,11 @@ def main():
                 sr = 16000
                 print(f"Synthetic: {len(audio)} samples at {sr}Hz ({len(audio)/sr:.2f}s)")
             
-            # Preprocess with log-mel
-            features = preprocess_for_xvector_v2(audio, sr)
+            # Preprocess with MFCC for ECAPA-TDNN
+            features = preprocess_for_ecapa_tdnn(audio, sr)
             
             # Run model
-            embedding = run_xvector_model(features, model_path)
+            embedding = run_ecapa_tdnn_model(features, model_path)
             
             if embedding is not None:
                 embeddings.append((str(source_name), embedding))
@@ -249,10 +203,44 @@ def main():
             print()
             
         print(f"\n🎯 Key Findings:")
-        print("- Values close to 1.0 = Same speaker")  
-        print("- Values below 0.8 = Different speakers")
-        print("- Real audio files are all from user001 (same person)")
-        print("- Synthetic voices should show lower similarity to real voices")
+        print("- Values ≥95% = Same speaker ✅")  
+        print("- Values 60-80% = Different speakers (acceptable)")
+        print("- Values ≤60% = Very different speakers/synthetic ✅")
+        print("- ECAPA-TDNN threshold recommendations:")
+        print("  • Same speaker verification: ≥95%")
+        print("  • Different speaker rejection: ≤75%")
+        
+        # Analyze results
+        print(f"\n📈 Analysis:")
+        same_speaker_pairs = []
+        different_speaker_pairs = []
+        
+        for i, (name1, emb1) in enumerate(embeddings):
+            for j, (name2, emb2) in enumerate(embeddings):
+                if i < j:  # Avoid duplicates
+                    similarity = calculate_similarity(emb1, emb2)
+                    name1_clean = Path(name1).stem if "/" in name1 else name1
+                    name2_clean = Path(name2).stem if "/" in name2 else name2
+                    
+                    # Check if same speaker (user001 files)
+                    if "user001" in name1_clean and "user001" in name2_clean:
+                        same_speaker_pairs.append((name1_clean, name2_clean, similarity))
+                    elif "synthetic" not in name1_clean and "synthetic" not in name2_clean:
+                        different_speaker_pairs.append((name1_clean, name2_clean, similarity))
+        
+        if same_speaker_pairs:
+            print("Same Speaker Comparisons:")
+            for n1, n2, sim in same_speaker_pairs:
+                status = "✅ PASS" if sim >= 0.95 else "❌ FAIL"
+                print(f"  {n1} vs {n2}: {sim:.3f} ({sim*100:.1f}%) {status}")
+        
+        if different_speaker_pairs:
+            print("Different Speaker Comparisons:")
+            for n1, n2, sim in different_speaker_pairs:
+                status = "✅ PASS" if sim <= 0.80 else "⚠️  HIGH" 
+                print(f"  {n1} vs {n2}: {sim:.3f} ({sim*100:.1f}%) {status}")
+                if sim > 0.80:
+                    print(f"    Note: High similarity might indicate similar speakers or recording conditions")
 
 if __name__ == "__main__":
     main()
