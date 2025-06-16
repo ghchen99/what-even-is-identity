@@ -15,3 +15,5 @@ speechbrain
 onnx
 transformers
 mediapipe
+librosa
+soundfile
