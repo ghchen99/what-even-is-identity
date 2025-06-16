@@ -2,6 +2,7 @@
 
 # Biometric API Test Runner
 # This script starts the backend server and runs the API tests
+# Debug mode is enabled to generate face detection visualization images
 
 echo "🚀 Biometric API Test Runner"
 echo "============================"
@@ -12,25 +13,18 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Check if backend directory exists
-if [ ! -d "backend" ]; then
-    echo "❌ Backend directory not found"
-    echo "Make sure you're running this from the project root"
-    exit 1
-fi
-
 # Check for existing virtual environment
-if [ -f ".venv/bin/activate" ]; then
+if [ -f "../.venv/bin/activate" ]; then
     echo "📦 Using existing virtual environment at project root"
-    source .venv/bin/activate
-elif [ -f "venv/bin/activate" ]; then
+    source ../.venv/bin/activate
+elif [ -f "../venv/bin/activate" ]; then
     echo "📦 Using existing virtual environment (venv) at project root"
-    source venv/bin/activate
-elif [ -f "backend/.venv/bin/activate" ]; then
+    source ../venv/bin/activate
+elif [ -f ".venv/bin/activate" ]; then
     echo "📦 Using existing virtual environment in backend/"
-    source backend/.venv/bin/activate
+    source .venv/bin/activate
 else
-    echo "📦 Creating new virtual environment at project root..."
+    echo "📦 Creating new virtual environment in backend..."
     python3 -m venv .venv
     source .venv/bin/activate
     echo "✅ Virtual environment created"
@@ -38,7 +32,7 @@ fi
 
 # Install/update dependencies
 echo "📦 Installing backend dependencies..."
-pip install -r backend/requirements.txt
+pip install -r requirements.txt
 
 # Function to check if server is running
 check_server() {
@@ -48,10 +42,11 @@ check_server() {
 
 # Start backend server in background
 echo "🖥️  Starting backend server..."
-cd backend
+echo "🐛 Debug mode enabled - face detection images will be saved to debug_output/"
+# Enable debug mode
+export BIOMETRIC_DEBUG=true
 python run.py &
 SERVER_PID=$!
-cd ..
 
 # Wait for server to start
 echo "⏳ Waiting for server to start..."
@@ -71,8 +66,7 @@ done
 # Run tests
 echo ""
 echo "🧪 Running API tests..."
-cd "$(dirname "$0")"  # Go to script directory (project root)
-python3 test_api.py
+python3 tests/test_api.py
 
 TEST_EXIT_CODE=$?
 
@@ -86,8 +80,14 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
     echo "🎉 All tests completed successfully!"
     echo ""
     echo "📁 Check these directories for results:"
-    echo "   - test-user/          (generated test files)"
-    echo "   - backend/data/       (stored user data)"
+    echo "   - tests/fixtures/     (test files used)"
+    echo "   - data/               (stored user data)"
+    echo "   - debug_output/       (face detection debug images)"
+    echo ""
+    echo "🐛 Debug image legend:"
+    echo "   - *_detected_*.jpg:   Red box = face detection, Green box = crop area"
+    echo "   - *_cropped.jpg:      Final 160x160px face sent to model"
+    echo "   - *_fallback_*.jpg:   Green box = center crop (when detection fails)"
 else
     echo "❌ Some tests failed"
 fi

@@ -215,6 +215,55 @@ curl -X POST "http://localhost:8000/api/v1/biometric/verify" \
 curl "http://localhost:8000/api/v1/health"
 ```
 
+## Debug Mode
+
+The system includes a debug mode for face detection analysis. Enable it by setting the environment variable:
+
+```bash
+export BIOMETRIC_DEBUG=true
+```
+
+### Debug Output
+
+When debug mode is enabled, the system saves visualization images to `debug_output/` directory:
+
+#### Debug Image Types
+
+1. **Detection Images** (`*_detected_*.jpg`):
+   - **Red Box**: MediaPipe face detection bounding box
+   - **Green Box**: Final crop area (detection + 20px margin)
+   - **Text Label**: Detection confidence score
+   - Shows the original image with overlaid detection results
+
+2. **Cropped Images** (`*_cropped.jpg`):
+   - The actual face region sent to the recognition model
+   - Resized to 160x160 pixels (FaceNet standard)
+   - Final processed image after detection and cropping
+
+3. **Fallback Images** (`*_fallback_*.jpg`, `*_no_face_*.jpg`, `*_error_*.jpg`):
+   - **Green Box**: Center crop area (70% of image)
+   - Used when MediaPipe detection fails
+   - Shows fallback cropping strategy
+
+#### Debug Prefixes
+
+- `enroll_<user_id>_*`: Images from enrollment process
+- `verify_<user_id>_*`: Images from verification process
+- `debug_test_*`: Images from manual testing
+
+### Console Output
+
+Debug mode also provides detailed console logging:
+
+```
+✅ Face detected with confidence: 0.939
+   Detection box: (928, 1630, 1735, 2437)
+   Crop box (with margin): (908, 1610, 1755, 2457)
+🐛 Debug image saved: debug_output/enroll_user123_detected_f8d111b4.jpg
+```
+
+This helps verify face detection accuracy and troubleshoot processing issues.
+
 ## Error Handling
 
 The API returns appropriate HTTP status codes:

@@ -45,7 +45,7 @@ async def enroll_user(
             raise HTTPException(status_code=400, detail="Invalid voice audio format")
         
         # Extract embeddings
-        face_embedding = await biometric.extract_face_embedding(face_data)
+        face_embedding = await biometric.extract_face_embedding(face_data, f"enroll_{user_id}")
         voice_embedding = await biometric.extract_voice_embedding(voice_data)
         
         # Create enrollment record
@@ -109,7 +109,7 @@ async def verify_user(
             raise HTTPException(status_code=400, detail="Invalid voice audio format")
         
         # Extract embeddings from verification data
-        face_embedding = await biometric.extract_face_embedding(face_data)
+        face_embedding = await biometric.extract_face_embedding(face_data, f"verify_{user_id}")
         voice_embedding = await biometric.extract_voice_embedding(voice_data)
         
         # Get stored embeddings

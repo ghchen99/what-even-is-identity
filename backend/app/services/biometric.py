@@ -1,11 +1,13 @@
 import numpy as np
 import onnxruntime as ort
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 import io
 from typing import Optional, Tuple
 from pathlib import Path
 from scipy.spatial.distance import cosine
 import torch
+import uuid
+import os
 
 from app.core.config import settings
 
@@ -28,6 +30,13 @@ class BiometricService:
         # Model specifications
         self.face_input_size = (160, 160)  # FaceNet standard
         self.voice_sample_rate = 16000     # Standard sample rate
+        
+        # Debug settings
+        self.debug_mode = os.getenv('BIOMETRIC_DEBUG', 'false').lower() == 'true'
+        self.debug_dir = Path("debug_output")
+        if self.debug_mode:
+            self.debug_dir.mkdir(exist_ok=True)
+            print(f"🐛 Debug mode enabled - saving debug images to {self.debug_dir}")
     
     def _load_face_model(self) -> Optional[ort.InferenceSession]:
         """Lazy load face recognition model"""
@@ -99,7 +108,7 @@ class BiometricService:
         
         return self._face_detector
     
-    def _detect_and_crop_face(self, image: Image.Image) -> Image.Image:
+    def _detect_and_crop_face(self, image: Image.Image, debug_prefix: str = None) -> Image.Image:
         """Detect and crop face from image using MediaPipe"""
         detector = self._load_face_detector()
         
@@ -112,7 +121,12 @@ class BiometricService:
             top = (height - crop_size) / 2
             right = left + crop_size
             bottom = top + crop_size
-            return image.crop((left, top, right, bottom))
+            cropped = image.crop((left, top, right, bottom))
+            
+            if self.debug_mode and debug_prefix:
+                self._save_debug_image(image, None, (left, top, right, bottom), f"{debug_prefix}_fallback")
+            
+            return cropped
         
         try:
             # Convert PIL to RGB numpy array for MediaPipe
@@ -130,7 +144,12 @@ class BiometricService:
                 top = (height - crop_size) / 2  
                 right = left + crop_size
                 bottom = top + crop_size
-                return image.crop((left, top, right, bottom))
+                cropped = image.crop((left, top, right, bottom))
+                
+                if self.debug_mode and debug_prefix:
+                    self._save_debug_image(image, None, (left, top, right, bottom), f"{debug_prefix}_no_face")
+                
+                return cropped
             
             # Use the first face detection (highest confidence by default)
             detection = results.detections[0]
@@ -147,6 +166,9 @@ class BiometricService:
             width = int(bbox.width * img_width)
             height = int(bbox.height * img_height)
             
+            # Store original detection box for debug
+            original_box = (x, y, x + width, y + height)
+            
             # Add margin around face
             margin = 20
             x = max(0, x - margin)
@@ -160,11 +182,23 @@ class BiometricService:
             width = min(width, img_width - x)
             height = min(height, img_height - y)
             
+            # Final crop box
+            crop_box = (x, y, x + width, y + height)
+            
             # Crop face from image
-            face_image = image.crop((x, y, x + width, y + height))
+            face_image = image.crop(crop_box)
             
             confidence = detection.score[0] if detection.score else 0.0
             print(f"✅ Face detected with confidence: {confidence:.3f}")
+            print(f"   Detection box: {original_box}")
+            print(f"   Crop box (with margin): {crop_box}")
+            
+            # Save debug images if enabled
+            if self.debug_mode and debug_prefix:
+                self._save_debug_image(image, original_box, crop_box, f"{debug_prefix}_detected", confidence)
+                # Also save the cropped face
+                face_image.save(self.debug_dir / f"{debug_prefix}_cropped.jpg")
+            
             return face_image
             
         except Exception as e:
@@ -176,9 +210,49 @@ class BiometricService:
             top = (height - crop_size) / 2
             right = left + crop_size
             bottom = top + crop_size
-            return image.crop((left, top, right, bottom))
+            cropped = image.crop((left, top, right, bottom))
+            
+            if self.debug_mode and debug_prefix:
+                self._save_debug_image(image, None, (left, top, right, bottom), f"{debug_prefix}_error")
+            
+            return cropped
     
-    def _preprocess_face_image(self, image_data: bytes) -> np.ndarray:
+    def _save_debug_image(self, original_image: Image.Image, detection_box: Optional[Tuple[int, int, int, int]], 
+                         crop_box: Tuple[int, int, int, int], prefix: str, confidence: float = None):
+        """Save debug image with bounding boxes drawn"""
+        try:
+            # Create a copy for drawing
+            debug_image = original_image.copy()
+            draw = ImageDraw.Draw(debug_image)
+            
+            # Try to load a font, fallback to default if not available
+            try:
+                font = ImageFont.truetype("Arial.ttf", 20)
+            except:
+                font = ImageFont.load_default()
+            
+            # Draw detection box in red if available
+            if detection_box:
+                draw.rectangle(detection_box, outline="red", width=3)
+                if confidence:
+                    draw.text((detection_box[0], detection_box[1] - 25), f"Detection: {confidence:.3f}", 
+                             fill="red", font=font)
+            
+            # Draw crop box in green
+            draw.rectangle(crop_box, outline="green", width=2)
+            draw.text((crop_box[0], crop_box[1] - 25 if not detection_box else crop_box[1] + crop_box[3] + 5), 
+                     "Crop area", fill="green", font=font)
+            
+            # Save debug image
+            debug_filename = f"{prefix}_{uuid.uuid4().hex[:8]}.jpg"
+            debug_path = self.debug_dir / debug_filename
+            debug_image.save(debug_path)
+            print(f"🐛 Debug image saved: {debug_path}")
+            
+        except Exception as e:
+            print(f"❌ Failed to save debug image: {e}")
+    
+    def _preprocess_face_image(self, image_data: bytes, debug_prefix: str = None) -> np.ndarray:
         """Preprocess face image for model inference"""
         try:
             # Load and convert image
@@ -188,7 +262,7 @@ class BiometricService:
                 image = image.convert('RGB')
             
             # Detect/crop face region
-            face_image = self._detect_and_crop_face(image)
+            face_image = self._detect_and_crop_face(image, debug_prefix)
             
             # Resize to model input size
             face_image = face_image.resize(self.face_input_size, Image.Resampling.LANCZOS)
@@ -225,10 +299,10 @@ class BiometricService:
         except Exception as e:
             raise ValueError(f"Failed to preprocess voice audio: {str(e)}")
     
-    async def extract_face_embedding(self, image_data: bytes) -> np.ndarray:
+    async def extract_face_embedding(self, image_data: bytes, debug_prefix: str = None) -> np.ndarray:
         """Extract face embedding from image"""
         try:
-            preprocessed_image = self._preprocess_face_image(image_data)
+            preprocessed_image = self._preprocess_face_image(image_data, debug_prefix)
             
             session = self._load_face_model()
             

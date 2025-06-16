@@ -19,7 +19,7 @@ from pathlib import Path
 # Configuration
 BASE_URL = "http://localhost:8000/api/v1"
 TEST_USER_ID = "test-user-123"
-TEST_USER_DIR = Path("test-user")
+TEST_USER_DIR = Path("tests/fixtures")
 
 class APITester:
     def __init__(self):
