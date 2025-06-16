@@ -37,13 +37,13 @@ def load_models():
         print("🔄 Loading ECAPA-TDNN encoder...")
         encoder = EncoderClassifier.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb",
-            savedir="pretrained_models/spkrec-ecapa-voxceleb"
+            savedir="backend/models/spkrec-ecapa-voxceleb"
         )
         
         print("🔄 Loading speaker verification model...")
         verification = SpeakerRecognition.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb", 
-            savedir="pretrained_models/spkrec-ecapa-voxceleb"
+            savedir="backend/models/spkrec-ecapa-voxceleb"
         )
         
         print("✅ Models loaded successfully")
@@ -78,27 +78,7 @@ def load_audio_for_speechbrain(audio_path, target_sr=16000):
         print(f"❌ Error loading {audio_path}: {e}")
         return None, None
 
-def create_synthetic_audio_torch(duration=3.0, sr=16000, freq_base=200):
-    """Create synthetic voice-like audio as PyTorch tensor"""
-    t = torch.linspace(0, duration, int(duration * sr))
-    
-    # Create voice-like signal with harmonics
-    signal = torch.zeros_like(t)
-    
-    for harmonic in range(1, 8):
-        freq = freq_base * harmonic
-        if freq < sr / 2:
-            amplitude = 1.0 / harmonic
-            signal += amplitude * torch.sin(2 * torch.pi * freq * t)
-    
-    # Add noise
-    signal += 0.1 * torch.randn_like(t)
-    
-    # Normalize and add batch dimension
-    signal = signal / torch.max(torch.abs(signal)) * 0.8
-    signal = signal.unsqueeze(0)  # Add channel dimension
-    
-    return signal
+
 
 def test_speechbrain_ecapa():
     """Test SpeechBrain ECAPA-TDNN implementation"""
@@ -122,19 +102,13 @@ def test_speechbrain_ecapa():
         real_files = list(audio_dir.glob("*.mp3"))[:4]  # Limit to 4 files
         test_files.extend(real_files)
         print(f"📁 Found {len(real_files)} real audio files")
+    else:
+        print("❌ No audio directory found")
+        return
     
-    # Synthetic audio
-    synthetic_voices = [
-        ("synthetic_low", create_synthetic_audio_torch(freq_base=150)),
-        ("synthetic_mid", create_synthetic_audio_torch(freq_base=200)), 
-        ("synthetic_high", create_synthetic_audio_torch(freq_base=300)),
-    ]
-    
-    # Silent audio
+    # Silent audio test
     silent_audio = torch.zeros(1, 48000)  # 3 seconds of silence
-    synthetic_voices.append(("silent", silent_audio))
-    
-    print(f"🎭 Created {len(synthetic_voices)} synthetic test signals")
+    print("🔇 Added silent audio test")
     
     # Test 1: Embedding Generation
     print(f"\n🧪 Test 1: Embedding Generation")
@@ -160,17 +134,16 @@ def test_speechbrain_ecapa():
             print(f"❌ {audio_file.name}: {e}")
     
     # Process synthetic audio
-    for name, signal in synthetic_voices:
-        try:
-            with torch.no_grad():
-                embedding = encoder.encode_batch(signal)
-                embedding_np = embedding.squeeze().cpu().numpy()
-                embedding_np = embedding_np / np.linalg.norm(embedding_np)
-                
-            embeddings.append((name, embedding_np))
-            print(f"✅ {name}: shape {embedding_np.shape}")
-        except Exception as e:
-            print(f"❌ {name}: {e}")
+    try:
+        with torch.no_grad():
+            embedding = encoder.encode_batch(silent_audio)
+            embedding_np = embedding.squeeze().cpu().numpy()
+            embedding_np = embedding_np / np.linalg.norm(embedding_np)
+            
+        embeddings.append(("silent", embedding_np))
+        print(f"✅ silent: shape {embedding_np.shape}")
+    except Exception as e:
+        print(f"❌ silent: {e}")
     
     # Test 2: Similarity Matrix
     if len(embeddings) >= 2:
@@ -264,9 +237,9 @@ def test_speechbrain_ecapa():
         print(f"  Std: {np.std(silent_embedding):.6f}")
         print(f"  Norm: {np.linalg.norm(silent_embedding):.6f}")
         
-        print("Silent vs other signals:")
+        print("Silent vs real audio:")
         for name, emb in embeddings:
-            if name != "silent":
+            if name != "silent" and not name.startswith("synthetic"):
                 sim = 1 - cosine(silent_embedding, emb)
                 status = "⚠️ HIGH" if sim > 0.3 else "✅ LOW"
                 print(f"  Silent vs {name}: {sim:.6f} {status}")
@@ -278,13 +251,13 @@ def test_speechbrain_ecapa():
     print("  • Same speaker: Score > 0.5, Prediction = SAME")
     print("  • Different speakers: Score < 0.5, Prediction = DIFFERENT") 
     print("  • Silent audio: Very low similarity with voice (<0.3)")
-    print("  • Synthetic audio: Low-medium similarity with real voice")
     
     print("\n💡 Advantages of SpeechBrain over ONNX:")
     print("  • Automatic preprocessing and normalization")
     print("  • Built-in speaker verification pipeline") 
     print("  • Proper model configuration and weights")
     print("  • Regular updates and community support")
+    print("  • Realistic similarity scores and thresholds")
 
 if __name__ == "__main__":
     test_speechbrain_ecapa()

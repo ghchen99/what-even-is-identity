@@ -198,7 +198,7 @@ cython_debug/
 backend/data/
 
 # ONNX model files (large binary files)
-backend/models/*.onnx
+backend/models/
 
 # Test data (may contain personal biometric samples)
 backend/debug_output/
