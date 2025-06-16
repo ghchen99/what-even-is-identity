@@ -30,8 +30,12 @@ class Settings(BaseSettings):
     FACE_MODEL_PATH: str = "facenet.onnx"
     VOICE_MODEL_PATH: str = "ecapa_tdnn.onnx"
     
-    # Biometric settings  
-    DEFAULT_SIMILARITY_THRESHOLD: float = 0.85  # Increased for ECAPA-TDNN
+    # Biometric settings - separate thresholds for dual verification
+    FACE_VERIFICATION_THRESHOLD: float = 0.80  # Face verification requires >80%
+    VOICE_VERIFICATION_THRESHOLD: float = 0.95  # Voice verification requires >95%
+    
+    # Legacy combined threshold (deprecated)
+    DEFAULT_SIMILARITY_THRESHOLD: float = 0.85  # Kept for backwards compatibility
     FACE_WEIGHT: float = 0.6
     VOICE_WEIGHT: float = 0.4
     

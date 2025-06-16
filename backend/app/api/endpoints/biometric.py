@@ -124,13 +124,19 @@ async def verify_user(
         # Calculate combined score
         combined_score = biometric.calculate_combined_score(face_similarity, voice_similarity)
         
-        # Create verification attempt record
+        # Get separate thresholds from config
+        face_threshold = settings.FACE_VERIFICATION_THRESHOLD
+        voice_threshold = settings.VOICE_VERIFICATION_THRESHOLD
+        
+        # Create verification attempt record with dual verification
         verification = VerificationAttempt.create(
             user_id=user_id,
             face_similarity=face_similarity,
             voice_similarity=voice_similarity,
             combined_score=combined_score,
-            threshold=threshold
+            threshold=threshold,
+            face_threshold=face_threshold,
+            voice_threshold=voice_threshold
         )
         
         # Save verification attempt
@@ -143,7 +149,11 @@ async def verify_user(
             voice_similarity=voice_similarity,
             combined_score=combined_score,
             threshold=threshold,
-            verification_id=verification_id
+            verification_id=verification_id,
+            face_verified=verification.face_verified,
+            voice_verified=verification.voice_verified,
+            face_threshold=face_threshold,
+            voice_threshold=voice_threshold
         )
         
     except HTTPException:

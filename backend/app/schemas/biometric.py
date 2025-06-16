@@ -23,6 +23,11 @@ class VerificationResponse(BaseModel):
     combined_score: float
     threshold: float
     verification_id: str
+    # Dual verification fields
+    face_verified: bool
+    voice_verified: bool
+    face_threshold: float
+    voice_threshold: float
 
 class BiometricScores(BaseModel):
     face_similarity: float = Field(..., ge=0.0, le=1.0)

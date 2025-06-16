@@ -48,6 +48,11 @@ class VerificationAttempt:
     threshold: float
     verified: bool
     timestamp: datetime
+    # Dual verification fields
+    face_verified: bool = False
+    voice_verified: bool = False
+    face_threshold: float = 0.80
+    voice_threshold: float = 0.95
     
     @classmethod
     def create(
@@ -56,8 +61,13 @@ class VerificationAttempt:
         face_similarity: float, 
         voice_similarity: float, 
         combined_score: float, 
-        threshold: float
+        threshold: float,
+        face_threshold: float = 0.80,
+        voice_threshold: float = 0.95
     ) -> 'VerificationAttempt':
+        face_verified = face_similarity >= face_threshold
+        voice_verified = voice_similarity >= voice_threshold
+        
         return cls(
             verification_id=str(uuid.uuid4()),
             user_id=user_id,
@@ -65,8 +75,12 @@ class VerificationAttempt:
             voice_similarity=voice_similarity,
             combined_score=combined_score,
             threshold=threshold,
-            verified=combined_score >= threshold,
-            timestamp=datetime.now()
+            verified=face_verified and voice_verified,  # Both must pass for dual verification
+            timestamp=datetime.now(),
+            face_verified=face_verified,
+            voice_verified=voice_verified,
+            face_threshold=face_threshold,
+            voice_threshold=voice_threshold
         )
     
     def to_dict(self) -> dict:

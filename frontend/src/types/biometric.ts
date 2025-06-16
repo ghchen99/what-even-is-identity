@@ -27,6 +27,11 @@ export interface BiometricVerificationResponse {
   combined_score: number;
   threshold: number;
   verified_at: string;
+  // Dual verification fields
+  face_verified: boolean;
+  voice_verified: boolean;
+  face_threshold: number;
+  voice_threshold: number;
 }
 
 export interface ApiError {

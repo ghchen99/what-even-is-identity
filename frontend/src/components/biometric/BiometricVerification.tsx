@@ -29,6 +29,9 @@ interface VerificationAttempt {
   combined_score: number;
   face_similarity: number;
   voice_similarity: number;
+  // Dual verification fields
+  face_verified: boolean;
+  voice_verified: boolean;
 }
 
 export default function BiometricVerification({
@@ -102,16 +105,21 @@ export default function BiometricVerification({
         verified: response.verified,
         combined_score: response.combined_score,
         face_similarity: response.face_similarity,
-        voice_similarity: response.voice_similarity
+        voice_similarity: response.voice_similarity,
+        face_verified: response.face_verified,
+        voice_verified: response.voice_verified
       };
 
       setVerificationHistory(prev => [attempt, ...prev.slice(0, 9)]); // Keep last 10
 
       if (response.verified) {
         setSuccessCount(prev => prev + 1);
-        toast.success(`Verification successful! Score: ${(response.combined_score * 100).toFixed(1)}%`);
+        toast.success(`✅ Dual Verification Successful! Face: ${response.face_verified ? '✓' : '✗'} | Voice: ${response.voice_verified ? '✓' : '✗'}`);
       } else {
-        toast.error(`Verification failed. Score: ${(response.combined_score * 100).toFixed(1)}%`);
+        const failedModes = [];
+        if (!response.face_verified) failedModes.push(`Face: ${(response.face_similarity * 100).toFixed(1)}% < ${(response.face_threshold * 100).toFixed(0)}%`);
+        if (!response.voice_verified) failedModes.push(`Voice: ${(response.voice_similarity * 100).toFixed(1)}% < ${(response.voice_threshold * 100).toFixed(0)}%`);
+        toast.error(`❌ Verification Failed - ${failedModes.join(' | ')}`);
       }
 
       if (onVerificationComplete) {
@@ -182,15 +190,35 @@ export default function BiometricVerification({
         {latestResult && (
           <Alert variant={latestResult.verified ? "default" : "destructive"}>
             <AlertDescription>
-              <div className="flex items-center justify-between">
-                <span>
-                  {latestResult.verified ? '✅ Verified' : '❌ Failed'} - 
-                  Combined Score: <strong>{(latestResult.combined_score * 100).toFixed(1)}%</strong>
-                </span>
-                <span className="text-xs">
-                  Face: {(latestResult.face_similarity * 100).toFixed(1)}% | 
-                  Voice: {(latestResult.voice_similarity * 100).toFixed(1)}%
-                </span>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>
+                    {latestResult.verified ? '✅ Dual Verification Successful' : '❌ Dual Verification Failed'}
+                  </span>
+                  <span className="text-xs">
+                    Combined: {(latestResult.combined_score * 100).toFixed(1)}%
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className={`flex items-center justify-between p-2 rounded ${latestResult.face_verified ? 'bg-green-100' : 'bg-red-100'}`}>
+                    <span>📷 Face</span>
+                    <span className="font-medium">
+                      {latestResult.face_verified ? '✓' : '✗'} {(latestResult.face_similarity * 100).toFixed(1)}%
+                      <span className="text-xs text-gray-600 ml-1">
+                        (≥{(latestResult.face_threshold * 100).toFixed(0)}%)
+                      </span>
+                    </span>
+                  </div>
+                  <div className={`flex items-center justify-between p-2 rounded ${latestResult.voice_verified ? 'bg-green-100' : 'bg-red-100'}`}>
+                    <span>🎤 Voice</span>
+                    <span className="font-medium">
+                      {latestResult.voice_verified ? '✓' : '✗'} {(latestResult.voice_similarity * 100).toFixed(1)}%
+                      <span className="text-xs text-gray-600 ml-1">
+                        (≥{(latestResult.voice_threshold * 100).toFixed(0)}%)
+                      </span>
+                    </span>
+                  </div>
+                </div>
               </div>
             </AlertDescription>
           </Alert>
@@ -272,9 +300,13 @@ export default function BiometricVerification({
                       {attempt.timestamp.toLocaleTimeString()}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-600">
-                    Face: {(attempt.face_similarity * 100).toFixed(1)}% | 
-                    Voice: {(attempt.voice_similarity * 100).toFixed(1)}%
+                  <div className="text-xs text-gray-600 grid grid-cols-2 gap-2">
+                    <span className={attempt.face_verified ? 'text-green-600' : 'text-red-600'}>
+                      📷 {attempt.face_verified ? '✓' : '✗'} {(attempt.face_similarity * 100).toFixed(1)}%
+                    </span>
+                    <span className={attempt.voice_verified ? 'text-green-600' : 'text-red-600'}>
+                      🎤 {attempt.voice_verified ? '✓' : '✗'} {(attempt.voice_similarity * 100).toFixed(1)}%
+                    </span>
                   </div>
                 </div>
               ))}
