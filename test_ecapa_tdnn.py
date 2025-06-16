@@ -9,44 +9,32 @@ import torchaudio
 import numpy as np
 from pathlib import Path
 from scipy.spatial.distance import cosine
-import sys
 import logging
 
 # Suppress some verbose logging
 logging.getLogger('speechbrain').setLevel(logging.WARNING)
 
-def install_requirements():
-    """Check and install required packages"""
-    try:
-        import speechbrain
-        print("✅ SpeechBrain already installed")
-    except ImportError:
-        print("📦 Installing SpeechBrain...")
-        import subprocess
-        subprocess.check_call([
-            sys.executable, "-m", "pip", "install", 
-            "git+https://github.com/speechbrain/speechbrain.git@develop"
-        ])
-        print("✅ SpeechBrain installed successfully")
 
 def load_models():
-    """Load SpeechBrain ECAPA-TDNN models"""
+    """Load SpeechBrain ECAPA-TDNN models from local filepath"""
     try:
         from speechbrain.inference.speaker import EncoderClassifier, SpeakerRecognition
         
-        print("🔄 Loading ECAPA-TDNN encoder...")
+        model_path = "backend/models/spkrec-ecapa-voxceleb"
+        
+        print("🔄 Loading ECAPA-TDNN encoder from local path...")
         encoder = EncoderClassifier.from_hparams(
-            source="speechbrain/spkrec-ecapa-voxceleb",
-            savedir="backend/models/spkrec-ecapa-voxceleb"
+            source=model_path,
+            savedir=model_path
         )
         
-        print("🔄 Loading speaker verification model...")
+        print("🔄 Loading speaker verification model from local path...")
         verification = SpeakerRecognition.from_hparams(
-            source="speechbrain/spkrec-ecapa-voxceleb", 
-            savedir="backend/models/spkrec-ecapa-voxceleb"
+            source=model_path, 
+            savedir=model_path
         )
         
-        print("✅ Models loaded successfully")
+        print("✅ Models loaded successfully from local path")
         return encoder, verification
         
     except Exception as e:
@@ -84,9 +72,6 @@ def test_speechbrain_ecapa():
     """Test SpeechBrain ECAPA-TDNN implementation"""
     print("🎤 SpeechBrain ECAPA-TDNN Voice Recognition Test")
     print("=" * 60)
-    
-    # Install requirements if needed
-    install_requirements()
     
     # Load models
     encoder, verification = load_models()
