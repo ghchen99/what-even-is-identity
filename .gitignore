@@ -201,4 +201,4 @@ backend/data/
 backend/models/*.onnx
 
 # Test data (may contain personal biometric samples)
-test-user/
+backend/debug_output/

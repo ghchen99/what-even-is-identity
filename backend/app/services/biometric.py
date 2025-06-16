@@ -196,8 +196,11 @@ class BiometricService:
             # Save debug images if enabled
             if self.debug_mode and debug_prefix:
                 self._save_debug_image(image, original_box, crop_box, f"{debug_prefix}_detected", confidence)
-                # Also save the cropped face
-                face_image.save(self.debug_dir / f"{debug_prefix}_cropped.jpg")
+                # Also save the cropped face with unique ID
+                unique_id = uuid.uuid4().hex[:8]
+                cropped_filename = f"{debug_prefix}_cropped_{unique_id}.jpg"
+                face_image.save(self.debug_dir / cropped_filename)
+                print(f"🐛 Cropped face saved: {self.debug_dir / cropped_filename}")
             
             return face_image
             
