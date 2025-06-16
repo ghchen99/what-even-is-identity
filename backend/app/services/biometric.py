@@ -32,7 +32,7 @@ class BiometricService:
         self.voice_sample_rate = 16000     # Standard sample rate
         
         # Debug settings
-        self.debug_mode = os.getenv('BIOMETRIC_DEBUG', 'false').lower() == 'true'
+        self.debug_mode = settings.BIOMETRIC_DEBUG
         self.debug_dir = Path("debug_output")
         if self.debug_mode:
             self.debug_dir.mkdir(exist_ok=True)
@@ -405,18 +405,23 @@ class BiometricService:
     
     def get_model_info(self) -> dict:
         """Get model loading status and information"""
+        face_model_available = self.face_model_path.exists()
+        voice_model_available = self.voice_model_path.exists()
+        
         return {
             "face_model": {
-                "loaded": self._face_session is not None,
+                "loaded": face_model_available,  # Show available if file exists (lazy loading)
                 "path": str(self.face_model_path),
-                "exists": self.face_model_path.exists(),
-                "input_size": self.face_input_size
+                "exists": face_model_available,
+                "input_size": self.face_input_size,
+                "session_loaded": self._face_session is not None
             },
             "voice_model": {
-                "loaded": self._voice_session is not None,
+                "loaded": voice_model_available,  # Show available if file exists (lazy loading)
                 "path": str(self.voice_model_path),
-                "exists": self.voice_model_path.exists(),
-                "sample_rate": self.voice_sample_rate
+                "exists": voice_model_available,
+                "sample_rate": self.voice_sample_rate,
+                "session_loaded": self._voice_session is not None
             },
             "face_detection": {
                 "mediapipe_available": MEDIAPIPE_AVAILABLE if MEDIAPIPE_AVAILABLE is not None else "not_checked",

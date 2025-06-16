@@ -2,7 +2,6 @@
 
 # Biometric API Test Runner
 # This script starts the backend server and runs the API tests
-# Debug mode is enabled to generate face detection visualization images
 
 echo "🚀 Biometric API Test Runner"
 echo "============================"
@@ -42,9 +41,11 @@ check_server() {
 
 # Start backend server in background
 echo "🖥️  Starting backend server..."
-echo "🐛 Debug mode enabled - face detection images will be saved to debug_output/"
-# Enable debug mode
-export BIOMETRIC_DEBUG=true
+# Set debug mode
+export BIOMETRIC_DEBUG=false
+if [ "$BIOMETRIC_DEBUG" = "true" ]; then
+    echo "🐛 Debug mode enabled - face detection images will be saved to debug_output/"
+fi
 python run.py &
 SERVER_PID=$!
 
@@ -82,12 +83,14 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
     echo "📁 Check these directories for results:"
     echo "   - tests/fixtures/     (test files used)"
     echo "   - data/               (stored user data)"
-    echo "   - debug_output/       (face detection debug images)"
-    echo ""
-    echo "🐛 Debug image legend:"
-    echo "   - *_detected_*.jpg:   Red box = face detection, Green box = crop area"
-    echo "   - *_cropped.jpg:      Final 160x160px face sent to model"
-    echo "   - *_fallback_*.jpg:   Green box = center crop (when detection fails)"
+    if [ "$BIOMETRIC_DEBUG" = "true" ]; then
+        echo "   - debug_output/       (face detection debug images)"
+        echo ""
+        echo "🐛 Debug image legend:"
+        echo "   - *_detected_*.jpg:   Red box = face detection, Green box = crop area"
+        echo "   - *_cropped.jpg:      Final 160x160px face sent to model"
+        echo "   - *_fallback_*.jpg:   Green box = center crop (when detection fails)"
+    fi
 else
     echo "❌ Some tests failed"
 fi

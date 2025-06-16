@@ -154,7 +154,7 @@ class APITester:
                 print(f"   Error details: {e.response.text}")
             return False
     
-    def test_verification(self, face_file, voice_file, expected_result=True, threshold=0.6):
+    def test_verification(self, face_file, voice_file, expected_result=True, threshold=0.8):
         """Test user verification"""
         print(f"🔍 Testing verification (expected: {'PASS' if expected_result else 'FAIL'})...")
         
@@ -294,9 +294,9 @@ class APITester:
             ("Health Check", self.test_health_check),
             ("User Enrollment", self.test_enrollment),
             ("Same User Verification", lambda: self.test_verification(
-                self.verification_face, self.verification_voice, True, 0.6)),
+                self.verification_face, self.verification_voice, True, 0.8)),
             ("Different User Verification", lambda: self.test_verification(
-                self.different_face, self.different_voice, False, 0.6)),
+                self.different_face, self.different_voice, False, 0.8)),
             ("High Threshold Verification", lambda: self.test_verification(
                 self.verification_face, self.verification_voice, True, 0.95)),
             ("Get User Enrollments", self.test_user_enrollments),
