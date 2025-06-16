@@ -12,11 +12,7 @@ Usage:
 import os
 import sys
 import torch
-import torch.nn as nn
-import numpy as np
 from pathlib import Path
-import tempfile
-import shutil
 import json
 
 def install_requirements():
@@ -93,54 +89,30 @@ def download_facenet_model():
         return False
 
 def download_speechbrain_speaker_model():
-    """Download and convert SpeechBrain ECAPA-TDNN speaker model to ONNX"""
+    """Download SpeechBrain ECAPA-TDNN speaker model to backend/models"""
     print("\n🎤 Downloading SpeechBrain ECAPA-TDNN speaker model...")
     
     try:
-        from speechbrain.inference.speaker import SpeakerRecognition
+        from speechbrain.inference.speaker import EncoderClassifier, SpeakerRecognition
         
-        # Load pre-trained ECAPA-TDNN model from SpeechBrain
-        print("   - Loading SpeechBrain ECAPA-TDNN model...")
+        # Load pre-trained ECAPA-TDNN models from SpeechBrain
+        print("   - Loading SpeechBrain ECAPA-TDNN encoder...")
+        encoder = EncoderClassifier.from_hparams(
+            source="speechbrain/spkrec-ecapa-voxceleb",
+            savedir="backend/models/spkrec-ecapa-voxceleb"
+        )
+        
+        print("   - Loading SpeechBrain speaker verification model...")
         verification = SpeakerRecognition.from_hparams(
             source="speechbrain/spkrec-ecapa-voxceleb", 
-            savedir="temp_models/spkrec-ecapa-voxceleb",
-            run_opts={"device": "cpu"}
+            savedir="backend/models/spkrec-ecapa-voxceleb"
         )
         
-        # Extract the encoder model for ONNX export
-        model = verification.mods.embedding_model.eval()
-        
-        # Create dummy input - ECAPA-TDNN expects spectrograms
-        # Input shape: [batch, time, features] where features=80 (MFCC features)
-        dummy_input = torch.randn(1, 300, 80)  # batch=1, time_frames=300, features=80
-        
-        # Export to ONNX
-        output_path = Path("backend/models/ecapa_tdnn.onnx")
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        torch.onnx.export(
-            model,
-            dummy_input,
-            str(output_path),
-            export_params=True,
-            opset_version=11,
-            do_constant_folding=True,
-            input_names=['input'],
-            output_names=['embedding'],
-            dynamic_axes={
-                'input': {0: 'batch_size', 1: 'time_steps'},
-                'embedding': {0: 'batch_size'}
-            }
-        )
-        
-        print(f"✅ ECAPA-TDNN model saved to: {output_path}")
-        print(f"   - Input shape: [batch_size, time_steps, 80] (MFCC features)")
-        print(f"   - Output shape: [batch_size, 192] (speaker embeddings)")
+        print(f"✅ SpeechBrain models saved to: backend/models/spkrec-ecapa-voxceleb")
+        print(f"   - Encoder for embedding extraction")
+        print(f"   - Verification model for speaker comparison")
         print(f"   - Model trained on VoxCeleb dataset")
         print(f"   - EER: 0.69% on VoxCeleb1-test")
-        
-        # Clean up temp directory
-        shutil.rmtree("temp_models", ignore_errors=True)
         
         return True
         
@@ -149,8 +121,8 @@ def download_speechbrain_speaker_model():
         return False
 
 def verify_models():
-    """Verify that the ONNX models can be loaded"""
-    print("\n🔍 Verifying ONNX models...")
+    """Verify that the models can be loaded"""
+    print("\n🔍 Verifying models...")
     
     try:
         import onnxruntime as ort
@@ -166,15 +138,14 @@ def verify_models():
             print(f"❌ FaceNet model not found")
             return False
         
-        # Check ECAPA-TDNN model
-        speaker_model_path = "backend/models/ecapa_tdnn.onnx"
-        if os.path.exists(speaker_model_path):
-            session = ort.InferenceSession(speaker_model_path)
-            print(f"✅ ECAPA-TDNN model verified")
-            print(f"   - Inputs: {[input.name for input in session.get_inputs()]}")
-            print(f"   - Outputs: {[output.name for output in session.get_outputs()]}")
+        # Check SpeechBrain model directory
+        speechbrain_model_path = "backend/models/spkrec-ecapa-voxceleb"
+        if os.path.exists(speechbrain_model_path):
+            print(f"✅ SpeechBrain model directory verified")
+            print(f"   - Path: {speechbrain_model_path}")
+            print(f"   - Contains SpeechBrain ECAPA-TDNN models")
         else:
-            print(f"❌ ECAPA-TDNN model not found")
+            print(f"❌ SpeechBrain model directory not found")
             return False
         
         return True
@@ -198,13 +169,12 @@ def create_model_info_file():
             "description": "FaceNet model pretrained on VGGFace2 dataset"
         },
         "speaker_model": {
-            "name": "ecapa_tdnn",
-            "path": "backend/models/ecapa_tdnn.onnx",
-            "input_shape": [1, -1, 80],
-            "output_shape": [1, 192],
-            "input_type": "mfcc_features",
-            "preprocessing": "extract_mfcc_80_features",
-            "description": "ECAPA-TDNN model pretrained on VoxCeleb dataset",
+            "name": "speechbrain_ecapa_tdnn",
+            "path": "backend/models/spkrec-ecapa-voxceleb",
+            "model_type": "speechbrain",
+            "input_type": "audio_waveform",
+            "preprocessing": "speechbrain_internal",
+            "description": "SpeechBrain ECAPA-TDNN model pretrained on VoxCeleb dataset",
             "performance": "0.69% EER on VoxCeleb1-test"
         }
     }
@@ -247,7 +217,7 @@ def main():
         print(f"✅ {success_count}/2 models created")
         print("\nDownloaded models:")
         print("- Face recognition: FaceNet (VGGFace2 pretrained)")
-        print("- Speaker recognition: ECAPA-TDNN (VoxCeleb pretrained)")
+        print("- Speaker recognition: SpeechBrain ECAPA-TDNN (VoxCeleb pretrained)")
         print("- Performance: 0.69% EER on VoxCeleb1-test")
             
         print("\nNext steps:")
