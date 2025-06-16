@@ -15,9 +15,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 from pathlib import Path
-import urllib.request
 import tempfile
 import shutil
+import json
 
 def install_requirements():
     """Install required packages for model conversion"""
@@ -28,14 +28,24 @@ def install_requirements():
         "speechbrain",
         "torchaudio",
         "onnx",
-        "transformers"
+        "transformers",
+        "onnxruntime"
     ]
     
     print("📦 Installing required packages...")
     for package in packages:
         try:
-            __import__(package.replace("-", "_"))
-            print(f"✅ {package} already installed")
+            if package == "speechbrain":
+                # Special handling for speechbrain
+                try:
+                    import speechbrain
+                    print(f"✅ {package} already installed")
+                except ImportError:
+                    print(f"⬇️  Installing {package}...")
+                    os.system(f"{sys.executable} -m pip install git+https://github.com/speechbrain/speechbrain.git@develop")
+            else:
+                __import__(package.replace("-", "_"))
+                print(f"✅ {package} already installed")
         except ImportError:
             print(f"⬇️  Installing {package}...")
             os.system(f"{sys.executable} -m pip install {package}")
@@ -82,84 +92,30 @@ def download_facenet_model():
         print(f"❌ Failed to download FaceNet: {e}")
         return False
 
-def download_voice_model():
-    """Download and convert voice recognition model to ONNX"""
-    print("\n🎤 Creating voice recognition model...")
+def download_speechbrain_speaker_model():
+    """Download and convert SpeechBrain ECAPA-TDNN speaker model to ONNX"""
+    print("\n🎤 Downloading SpeechBrain ECAPA-TDNN speaker model...")
     
     try:
-        # Simple x-vector-like model for voice recognition
-        class SimpleXVector(nn.Module):
-            def __init__(self, input_dim=80, embedding_dim=256):
-                super(SimpleXVector, self).__init__()
-                
-                # Frame-level layers
-                self.frame_layers = nn.Sequential(
-                    nn.Linear(input_dim, 512),
-                    nn.ReLU(),
-                    nn.BatchNorm1d(512),
-                    
-                    nn.Linear(512, 512),
-                    nn.ReLU(),
-                    nn.BatchNorm1d(512),
-                    
-                    nn.Linear(512, 512),
-                    nn.ReLU(),
-                    nn.BatchNorm1d(512),
-                )
-                
-                # Statistics pooling (mean + std)
-                self.stats_dim = 512 * 2  # mean + std
-                
-                # Segment-level layers
-                self.segment_layers = nn.Sequential(
-                    nn.Linear(self.stats_dim, 512),
-                    nn.ReLU(),
-                    nn.BatchNorm1d(512),
-                    
-                    nn.Linear(512, embedding_dim),
-                )
-            
-            def forward(self, x):
-                # x shape: [batch, features, time]
-                batch_size, feat_dim, time_steps = x.shape
-                
-                # Reshape for frame-level processing
-                x = x.transpose(1, 2).contiguous()  # [batch, time, features]
-                x = x.view(-1, feat_dim)  # [batch*time, features]
-                
-                # Frame-level processing
-                x = self.frame_layers(x)  # [batch*time, 512]
-                
-                # Reshape back
-                x = x.view(batch_size, time_steps, -1)  # [batch, time, 512]
-                x = x.transpose(1, 2)  # [batch, 512, time]
-                
-                # Statistics pooling
-                mean = torch.mean(x, dim=2)  # [batch, 512]
-                std = torch.std(x, dim=2)    # [batch, 512]
-                stats = torch.cat([mean, std], dim=1)  # [batch, 1024]
-                
-                # Segment-level processing
-                embedding = self.segment_layers(stats)  # [batch, 256]
-                
-                # L2 normalize
-                embedding = nn.functional.normalize(embedding, p=2, dim=1)
-                
-                return embedding
+        from speechbrain.inference.speaker import SpeakerRecognition
         
-        # Create model
-        model = SimpleXVector().eval()
+        # Load pre-trained ECAPA-TDNN model from SpeechBrain
+        print("   - Loading SpeechBrain ECAPA-TDNN model...")
+        verification = SpeakerRecognition.from_hparams(
+            source="speechbrain/spkrec-ecapa-voxceleb", 
+            savedir="temp_models/spkrec-ecapa-voxceleb",
+            run_opts={"device": "cpu"}
+        )
         
-        # Initialize weights
-        for m in model.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, 0, 0.01)
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0)
+        # Extract the encoder model for ONNX export
+        model = verification.mods.embedding_model.eval()
+        
+        # Create dummy input - ECAPA-TDNN expects spectrograms
+        # Input shape: [batch, time, features] where features=80 (MFCC features)
+        dummy_input = torch.randn(1, 300, 80)  # batch=1, time_frames=300, features=80
         
         # Export to ONNX
-        dummy_input = torch.randn(1, 80, 300)  # [batch, mfcc_features, time_frames]
-        output_path = Path("backend/models/xvector.onnx")
+        output_path = Path("backend/models/ecapa_tdnn.onnx")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         
         torch.onnx.export(
@@ -172,19 +128,24 @@ def download_voice_model():
             input_names=['input'],
             output_names=['embedding'],
             dynamic_axes={
-                'input': {0: 'batch_size', 2: 'time_steps'},
+                'input': {0: 'batch_size', 1: 'time_steps'},
                 'embedding': {0: 'batch_size'}
             }
         )
         
-        print(f"✅ X-Vector model saved to: {output_path}")
-        print(f"   - Input shape: [batch_size, 80, time_steps]")
-        print(f"   - Output shape: [batch_size, 256]")
+        print(f"✅ ECAPA-TDNN model saved to: {output_path}")
+        print(f"   - Input shape: [batch_size, time_steps, 80] (MFCC features)")
+        print(f"   - Output shape: [batch_size, 192] (speaker embeddings)")
+        print(f"   - Model trained on VoxCeleb dataset")
+        print(f"   - EER: 0.69% on VoxCeleb1-test")
+        
+        # Clean up temp directory
+        shutil.rmtree("temp_models", ignore_errors=True)
         
         return True
         
     except Exception as e:
-        print(f"❌ Failed to create voice model: {e}")
+        print(f"❌ Failed to download SpeechBrain model: {e}")
         return False
 
 def verify_models():
@@ -201,20 +162,59 @@ def verify_models():
             print(f"✅ FaceNet model verified")
             print(f"   - Inputs: {[input.name for input in session.get_inputs()]}")
             print(f"   - Outputs: {[output.name for output in session.get_outputs()]}")
+        else:
+            print(f"❌ FaceNet model not found")
+            return False
         
-        # Check X-Vector model
-        voice_model_path = "backend/models/xvector.onnx"
-        if os.path.exists(voice_model_path):
-            session = ort.InferenceSession(voice_model_path)
-            print(f"✅ X-Vector model verified")
+        # Check ECAPA-TDNN model
+        speaker_model_path = "backend/models/ecapa_tdnn.onnx"
+        if os.path.exists(speaker_model_path):
+            session = ort.InferenceSession(speaker_model_path)
+            print(f"✅ ECAPA-TDNN model verified")
             print(f"   - Inputs: {[input.name for input in session.get_inputs()]}")
             print(f"   - Outputs: {[output.name for output in session.get_outputs()]}")
+        else:
+            print(f"❌ ECAPA-TDNN model not found")
+            return False
         
         return True
         
     except Exception as e:
         print(f"❌ Model verification failed: {e}")
         return False
+
+def create_model_info_file():
+    """Create a JSON file with model information for the backend"""
+    print("\n📝 Creating model information file...")
+    
+    model_info = {
+        "face_model": {
+            "name": "facenet",
+            "path": "backend/models/facenet.onnx",
+            "input_shape": [1, 3, 160, 160],
+            "output_shape": [1, 512],
+            "input_type": "image",
+            "preprocessing": "resize_to_160x160_normalize",
+            "description": "FaceNet model pretrained on VGGFace2 dataset"
+        },
+        "speaker_model": {
+            "name": "ecapa_tdnn",
+            "path": "backend/models/ecapa_tdnn.onnx",
+            "input_shape": [1, -1, 80],
+            "output_shape": [1, 192],
+            "input_type": "mfcc_features",
+            "preprocessing": "extract_mfcc_80_features",
+            "description": "ECAPA-TDNN model pretrained on VoxCeleb dataset",
+            "performance": "0.69% EER on VoxCeleb1-test"
+        }
+    }
+    
+    # Save model info
+    info_path = Path("backend/models/model_info.json")
+    with open(info_path, 'w') as f:
+        json.dump(model_info, f, indent=2)
+    
+    print(f"✅ Model info saved to: {info_path}")
 
 def main():
     """Main function"""
@@ -230,26 +230,36 @@ def main():
     
     success_count = 0
     
-    # Try to download FaceNet model
+    # Download FaceNet model
     if download_facenet_model():
         success_count += 1
         
-    # Download voice model
-    if download_voice_model():
+    # Download SpeechBrain ECAPA-TDNN model
+    if download_speechbrain_speaker_model():
         success_count += 1
     
     # Verify models
-    if verify_models():
+    if verify_models() and success_count == 2:
+        # Create model info file
+        create_model_info_file()
+        
         print("\n🎉 Model setup completed successfully!")
         print(f"✅ {success_count}/2 models created")
+        print("\nDownloaded models:")
+        print("- Face recognition: FaceNet (VGGFace2 pretrained)")
+        print("- Speaker recognition: ECAPA-TDNN (VoxCeleb pretrained)")
+        print("- Performance: 0.69% EER on VoxCeleb1-test")
+            
         print("\nNext steps:")
         print("1. Start the backend server: cd backend && python run.py")
         print("2. Run API tests: python test_api.py")
+        print("3. Check model_info.json for integration details")
+        
+        return True
     else:
-        print("\n❌ Model verification failed")
+        print("\n❌ Model setup failed")
+        print(f"Successfully created: {success_count}/2 models")
         return False
-    
-    return True
 
 if __name__ == "__main__":
     main()
