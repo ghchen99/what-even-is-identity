@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import CameraCapture from './CameraCapture';
@@ -15,7 +14,6 @@ import { toast } from 'sonner';
 
 interface BiometricVerificationProps {
   userId: string;
-  threshold?: number;
   onVerificationComplete?: (response: BiometricVerificationResponse) => void;
   continuousVerification?: boolean;
   verificationInterval?: number; // milliseconds
@@ -26,7 +24,6 @@ interface VerificationAttempt {
   id: string;
   timestamp: Date;
   verified: boolean;
-  combined_score: number;
   face_similarity: number;
   voice_similarity: number;
   // Dual verification fields
@@ -36,7 +33,6 @@ interface VerificationAttempt {
 
 export default function BiometricVerification({
   userId,
-  threshold = 0.8,
   onVerificationComplete,
   continuousVerification = false,
   verificationInterval = 3000,
@@ -91,8 +87,7 @@ export default function BiometricVerification({
       const response = await BiometricAPI.verifyUser({
         user_id: userId,
         face_image: face,
-        voice_audio: voice,
-        threshold
+        voice_audio: voice
       });
 
       setLatestResult(response);
@@ -103,7 +98,6 @@ export default function BiometricVerification({
         id: response.verification_id,
         timestamp: new Date(),
         verified: response.verified,
-        combined_score: response.combined_score,
         face_similarity: response.face_similarity,
         voice_similarity: response.voice_similarity,
         face_verified: response.face_verified,
@@ -167,8 +161,7 @@ export default function BiometricVerification({
         <CardTitle className="text-center">Biometric Verification</CardTitle>
         <div className="space-y-2">
           <div className="text-center text-sm text-gray-600">
-            User ID: <span className="font-mono font-medium">{userId}</span> | 
-            Threshold: <span className="font-medium">{(threshold * 100).toFixed(0)}%</span>
+            User ID: <span className="font-mono font-medium">{userId}</span>
           </div>
           {totalAttempts > 0 && (
             <div className="text-center text-sm">
@@ -194,9 +187,6 @@ export default function BiometricVerification({
                 <div className="flex items-center justify-between">
                   <span>
                     {latestResult.verified ? '✅ Dual Verification Successful' : '❌ Dual Verification Failed'}
-                  </span>
-                  <span className="text-xs">
-                    Combined: {(latestResult.combined_score * 100).toFixed(1)}%
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -293,7 +283,7 @@ export default function BiometricVerification({
                         </AvatarFallback>
                       </Avatar>
                       <span className="font-medium text-sm">
-                        {(attempt.combined_score * 100).toFixed(1)}%
+                        Dual Verification
                       </span>
                     </div>
                     <span className="text-xs text-gray-500">

@@ -32,16 +32,7 @@ class Settings(BaseSettings):
     
     # Biometric settings - separate thresholds for dual verification
     FACE_VERIFICATION_THRESHOLD: float = 0.80  # Face verification requires >80%
-    VOICE_VERIFICATION_THRESHOLD: float = 0.95  # Voice verification requires >95%
-    
-    # Legacy combined threshold (deprecated)
-    DEFAULT_SIMILARITY_THRESHOLD: float = 0.85  # Kept for backwards compatibility
-    FACE_WEIGHT: float = 0.6
-    VOICE_WEIGHT: float = 0.4
-    
-    # ECAPA-TDNN specific thresholds
-    VOICE_SAME_SPEAKER_THRESHOLD: float = 0.95  # 95%+ for same speaker
-    VOICE_DIFFERENT_SPEAKER_THRESHOLD: float = 0.75  # Below 75% for different speakers
+    VOICE_VERIFICATION_THRESHOLD: float = 0.50  # Voice verification requires >50%
     
     # Cache settings
     CACHE_TTL: int = 3600  # 1 hour

@@ -20,10 +20,7 @@ class VerificationResponse(BaseModel):
     verified: bool
     face_similarity: float
     voice_similarity: float
-    combined_score: float
-    threshold: float
     verification_id: str
-    # Dual verification fields
     face_verified: bool
     voice_verified: bool
     face_threshold: float
@@ -32,7 +29,6 @@ class VerificationResponse(BaseModel):
 class BiometricScores(BaseModel):
     face_similarity: float = Field(..., ge=0.0, le=1.0)
     voice_similarity: float = Field(..., ge=0.0, le=1.0)
-    combined_score: float = Field(..., ge=0.0, le=1.0)
 
 class UserEnrollment(BaseModel):
     user_id: str
@@ -47,9 +43,9 @@ class VerificationAttempt(BaseModel):
     timestamp: datetime
     face_similarity: float
     voice_similarity: float
-    combined_score: float
-    threshold: float
     verified: bool
+    face_verified: bool
+    voice_verified: bool
 
 class UserEnrollmentsResponse(BaseModel):
     user_id: str

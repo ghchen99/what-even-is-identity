@@ -63,9 +63,9 @@ async def get_user_verifications(
                 "timestamp": verification.timestamp,
                 "face_similarity": verification.face_similarity,
                 "voice_similarity": verification.voice_similarity,
-                "combined_score": verification.combined_score,
-                "threshold": verification.threshold,
-                "verified": verification.verified
+                "verified": verification.verified,
+                "face_verified": verification.face_verified,
+                "voice_verified": verification.voice_verified
             })
         
         return UserVerificationsResponse(

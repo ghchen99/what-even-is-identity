@@ -44,15 +44,12 @@ class VerificationAttempt:
     user_id: str
     face_similarity: float
     voice_similarity: float
-    combined_score: float
-    threshold: float
     verified: bool
     timestamp: datetime
-    # Dual verification fields
-    face_verified: bool = False
-    voice_verified: bool = False
-    face_threshold: float = 0.80
-    voice_threshold: float = 0.95
+    face_verified: bool
+    voice_verified: bool
+    face_threshold: float
+    voice_threshold: float
     
     @classmethod
     def create(
@@ -60,22 +57,18 @@ class VerificationAttempt:
         user_id: str, 
         face_similarity: float, 
         voice_similarity: float, 
-        combined_score: float, 
-        threshold: float,
-        face_threshold: float = 0.80,
-        voice_threshold: float = 0.95
-    ) -> 'VerificationAttempt':
-        face_verified = face_similarity >= face_threshold
-        voice_verified = voice_similarity >= voice_threshold
-        
+        verified: bool,
+        face_verified: bool,
+        voice_verified: bool,
+        face_threshold: float,
+        voice_threshold: float
+    ) -> 'VerificationAttempt':        
         return cls(
             verification_id=str(uuid.uuid4()),
             user_id=user_id,
             face_similarity=face_similarity,
             voice_similarity=voice_similarity,
-            combined_score=combined_score,
-            threshold=threshold,
-            verified=face_verified and voice_verified,  # Both must pass for dual verification
+            verified=verified,
             timestamp=datetime.now(),
             face_verified=face_verified,
             voice_verified=voice_verified,

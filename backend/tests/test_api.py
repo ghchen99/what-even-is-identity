@@ -154,7 +154,7 @@ class APITester:
                 print(f"   Error details: {e.response.text}")
             return False
     
-    def test_verification(self, face_file, voice_file, expected_result=True, threshold=0.8):
+    def test_verification(self, face_file, voice_file, expected_result=True):
         """Test user verification"""
         print(f"🔍 Testing verification (expected: {'PASS' if expected_result else 'FAIL'})...")
         
@@ -168,8 +168,7 @@ class APITester:
                 }
                 
                 data = {
-                    'user_id': TEST_USER_ID,
-                    'threshold': threshold
+                    'user_id': TEST_USER_ID
                 }
                 
                 response = self.session.post(f"{self.base_url}/biometric/verify", 
@@ -181,10 +180,8 @@ class APITester:
                 
                 print(f"✅ Verification completed!")
                 print(f"   - Verified: {result['verified']}")
-                print(f"   - Face similarity: {result['face_similarity']:.3f}")
-                print(f"   - Voice similarity: {result['voice_similarity']:.3f}")
-                print(f"   - Combined score: {result['combined_score']:.3f}")
-                print(f"   - Threshold: {result['threshold']}")
+                print(f"   - Face similarity: {result['face_similarity']:.3f} (≥{result['face_threshold']:.2f}: {'✅' if result['face_verified'] else '❌'})")
+                print(f"   - Voice similarity: {result['voice_similarity']:.3f} (≥{result['voice_threshold']:.2f}: {'✅' if result['voice_verified'] else '❌'})")
                 print(f"   - Verification ID: {result['verification_id']}")
                 print()
                 return True
@@ -235,7 +232,8 @@ class APITester:
                 print(f"     - ID: {verification['verification_id']}")
                 print(f"     - Date: {verification['timestamp']}")
                 print(f"     - Verified: {verification['verified']}")
-                print(f"     - Combined score: {verification['combined_score']:.3f}")
+                print(f"     - Face verified: {verification['face_verified']}")
+                print(f"     - Voice verified: {verification['voice_verified']}")
             print()
             return True
             
@@ -294,11 +292,11 @@ class APITester:
             ("Health Check", self.test_health_check),
             ("User Enrollment", self.test_enrollment),
             ("Same User Verification", lambda: self.test_verification(
-                self.verification_face, self.verification_voice, True, 0.8)),
+                self.verification_face, self.verification_voice, True)),
             ("Different User Verification", lambda: self.test_verification(
-                self.different_face, self.different_voice, False, 0.8)),
-            ("High Threshold Verification", lambda: self.test_verification(
-                self.verification_face, self.verification_voice, True, 0.95)),
+                self.different_face, self.different_voice, False)),
+            ("Cross-User Verification", lambda: self.test_verification(
+                self.verification_face, self.verification_voice, True)),
             ("Get User Enrollments", self.test_user_enrollments),
             ("Get User Verifications", self.test_user_verifications),
             ("Cache Cleanup", self.test_cache_cleanup),

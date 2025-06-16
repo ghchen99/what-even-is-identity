@@ -8,9 +8,9 @@ from scipy.spatial.distance import cosine
 import torch
 import uuid
 import os
-import librosa
 
 from app.core.config import settings
+from app.services.voice_speechbrain import VoiceSpeechBrainService
 
 # MediaPipe will be imported lazily to avoid startup issues
 MEDIAPIPE_AVAILABLE = None  # Will be checked lazily
@@ -19,18 +19,18 @@ class BiometricService:
     def __init__(self):
         self.models_dir = settings.MODELS_DIR
         self.face_model_path = self.models_dir / settings.FACE_MODEL_PATH
-        self.voice_model_path = self.models_dir / settings.VOICE_MODEL_PATH
         
         # ONNX Runtime sessions (lazy loading)
         self._face_session: Optional[ort.InferenceSession] = None
-        self._voice_session: Optional[ort.InferenceSession] = None
         
         # Face detection (lazy loading)
         self._face_detector = None
         
+        # Voice service using SpeechBrain
+        self.voice_service = VoiceSpeechBrainService()
+        
         # Model specifications
         self.face_input_size = (160, 160)  # FaceNet standard
-        self.voice_sample_rate = 16000     # Standard sample rate
         
         # Debug settings
         self.debug_mode = settings.BIOMETRIC_DEBUG
@@ -57,23 +57,6 @@ class BiometricService:
         
         return self._face_session
     
-    def _load_voice_model(self) -> Optional[ort.InferenceSession]:
-        """Lazy load voice recognition model"""
-        if self._voice_session is None:
-            if not self.voice_model_path.exists():
-                print(f"Warning: Voice model not found at {self.voice_model_path}")
-                return None
-            
-            providers = ['CPUExecutionProvider']
-            if ort.get_device() == 'GPU':
-                providers.insert(0, 'CUDAExecutionProvider')
-            
-            self._voice_session = ort.InferenceSession(
-                str(self.voice_model_path), 
-                providers=providers
-            )
-        
-        return self._voice_session
     
     def _load_face_detector(self):
         """Lazy load MediaPipe face detector"""
@@ -286,56 +269,6 @@ class BiometricService:
         except Exception as e:
             raise ValueError(f"Failed to preprocess face image: {str(e)}")
     
-    def _preprocess_voice_audio(self, audio_data: bytes) -> np.ndarray:
-        """Preprocess voice audio for ECAPA-TDNN model inference"""
-        try:
-            import tempfile
-            import soundfile as sf
-            
-            # Save audio bytes to temporary file for processing
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-                temp_file.write(audio_data)
-                temp_path = temp_file.name
-            
-            try:
-                # Load audio using librosa (same as test script)
-                audio, sr = librosa.load(temp_path, sr=self.voice_sample_rate, mono=True)
-                
-                # Extract MFCC features (80 features for ECAPA-TDNN)
-                mfccs = librosa.feature.mfcc(
-                    y=audio, 
-                    sr=sr, 
-                    n_mfcc=80,  # ECAPA-TDNN expects 80 MFCC coefficients
-                    n_fft=512,
-                    hop_length=160,
-                    win_length=400
-                )
-                
-                # Transpose to time x features format
-                features = mfccs.T
-                
-                # Add batch dimension
-                features = np.expand_dims(features, axis=0).astype(np.float32)
-                
-                print(f"ECAPA-TDNN MFCC features shape: {features.shape}")
-                return features
-                
-            finally:
-                # Clean up temporary file
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
-            
-        except ImportError as e:
-            print(f"Missing audio processing libraries: {e}")
-            # Fallback to mock features
-            mock_features = np.random.normal(0, 1, (1, 300, 80)).astype(np.float32)
-            return mock_features
-            
-        except Exception as e:
-            print(f"Audio preprocessing error: {e}")
-            # Fallback to mock features  
-            mock_features = np.random.normal(0, 1, (1, 300, 80)).astype(np.float32)
-            return mock_features
     
     async def extract_face_embedding(self, image_data: bytes, debug_prefix: str = None) -> np.ndarray:
         """Extract face embedding from image"""
@@ -369,35 +302,46 @@ class BiometricService:
             return embedding / np.linalg.norm(embedding)
     
     async def extract_voice_embedding(self, audio_data: bytes) -> np.ndarray:
-        """Extract voice embedding from audio"""
+        """Extract voice embedding from audio using SpeechBrain"""
+        import tempfile
+        import soundfile as sf
+        
+        # First, try to determine the audio format and convert if needed
+        temp_path = None
+        temp_input_path = None
+        
         try:
-            preprocessed_audio = self._preprocess_voice_audio(audio_data)
+            # Save audio bytes to temporary file with original format
+            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+                temp_file.write(audio_data)
+                temp_input_path = temp_file.name
             
-            session = self._load_voice_model()
+            # Convert to WAV format for SpeechBrain processing
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as wav_file:
+                temp_path = wav_file.name
             
-            if session is None:
-                # Mock embedding when model not available  
-                print("Using mock voice embedding (model not loaded)")
-                embedding = np.random.normal(0, 1, 192).astype(np.float32)  # ECAPA-TDNN outputs 192 features
-                return embedding / np.linalg.norm(embedding)
+            # Use librosa to load and convert the audio
+            import librosa
+            audio, sr = librosa.load(temp_input_path, sr=16000, mono=True)
             
-            # Run inference
-            input_name = session.get_inputs()[0].name
-            output_name = session.get_outputs()[0].name
+            # Save as WAV file
+            sf.write(temp_path, audio, sr)
             
-            result = session.run([output_name], {input_name: preprocessed_audio})
-            embedding = result[0].flatten()
+            # Clean up input file
+            if os.path.exists(temp_input_path):
+                os.unlink(temp_input_path)
+                temp_input_path = None
             
-            # Normalize embedding
-            embedding = embedding / np.linalg.norm(embedding)
-            
+            # Use SpeechBrain service to extract embedding
+            embedding = self.voice_service.extract_voice_embedding(temp_path)
             return embedding
-            
-        except Exception as e:
-            print(f"Voice embedding extraction failed: {str(e)}")
-            # Fallback to mock embedding
-            embedding = np.random.normal(0, 1, 192).astype(np.float32)  # ECAPA-TDNN outputs 192 features
-            return embedding / np.linalg.norm(embedding)
+                
+        finally:
+            # Clean up temporary files
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+            if temp_input_path and os.path.exists(temp_input_path):
+                os.unlink(temp_input_path)
     
     def calculate_cosine_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
         """Calculate cosine similarity between embeddings"""
@@ -418,9 +362,6 @@ class BiometricService:
             print(f"Similarity calculation failed: {str(e)}")
             return 0.0
     
-    def calculate_combined_score(self, face_similarity: float, voice_similarity: float) -> float:
-        """Calculate weighted combined similarity score"""
-        return (face_similarity * settings.FACE_WEIGHT) + (voice_similarity * settings.VOICE_WEIGHT)
     
     def validate_image_format(self, image_data: bytes) -> bool:
         """Validate uploaded image format"""
@@ -441,7 +382,6 @@ class BiometricService:
     def get_model_info(self) -> dict:
         """Get model loading status and information"""
         face_model_available = self.face_model_path.exists()
-        voice_model_available = self.voice_model_path.exists()
         
         return {
             "face_model": {
@@ -452,11 +392,10 @@ class BiometricService:
                 "session_loaded": self._face_session is not None
             },
             "voice_model": {
-                "loaded": voice_model_available,  # Show available if file exists (lazy loading)
-                "path": str(self.voice_model_path),
-                "exists": voice_model_available,
-                "sample_rate": self.voice_sample_rate,
-                "session_loaded": self._voice_session is not None
+                "loaded": self.voice_service.is_models_loaded(),
+                "path": self.voice_service.model_path,
+                "exists": Path(self.voice_service.model_path).exists(),
+                "speechbrain_service": True
             },
             "face_detection": {
                 "mediapipe_available": MEDIAPIPE_AVAILABLE if MEDIAPIPE_AVAILABLE is not None else "not_checked",

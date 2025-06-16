@@ -15,9 +15,14 @@ import { toast, Toaster } from 'sonner';
 
 export default function Home() {
   const [userId, setUserId] = useState('test-user-123');
-  const [threshold, setThreshold] = useState(0.8);
   const [isHealthy, setIsHealthy] = useState<boolean | null>(null);
-  const [healthInfo, setHealthInfo] = useState<any>(null);
+  const [healthInfo, setHealthInfo] = useState<{
+    models?: {
+      face_model?: { loaded: boolean };
+      voice_model?: { loaded: boolean };
+      face_detection?: { mediapipe_available: boolean };
+    };
+  } | null>(null);
   const [activeTab, setActiveTab] = useState('enrollment');
 
   // Check backend health on component mount
@@ -31,7 +36,7 @@ export default function Home() {
       setIsHealthy(true);
       setHealthInfo(health);
       toast.success('Backend connected successfully');
-    } catch (error) {
+    } catch {
       setIsHealthy(false);
       setHealthInfo(null);
       toast.error('Failed to connect to backend. Please ensure the backend server is running.');
@@ -48,9 +53,12 @@ export default function Home() {
 
   const handleVerificationComplete = (response: BiometricVerificationResponse) => {
     if (response.verified) {
-      toast.success(`Identity verified! Score: ${(response.combined_score * 100).toFixed(1)}%`);
+      toast.success(`Identity verified! Face: ${response.face_verified ? '✓' : '✗'} | Voice: ${response.voice_verified ? '✓' : '✗'}`);
     } else {
-      toast.error(`Verification failed. Score: ${(response.combined_score * 100).toFixed(1)}%`);
+      const failedModes = [];
+      if (!response.face_verified) failedModes.push(`Face: ${(response.face_similarity * 100).toFixed(1)}%`);
+      if (!response.voice_verified) failedModes.push(`Voice: ${(response.voice_similarity * 100).toFixed(1)}%`);
+      toast.error(`Verification failed - ${failedModes.join(' | ')}`);
     }
   };
 
@@ -105,7 +113,7 @@ export default function Home() {
             <CardTitle className="text-center">Configuration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex justify-center">
               <div className="space-y-2">
                 <label className="text-sm font-medium">User ID</label>
                 <div className="flex space-x-2">
@@ -113,26 +121,11 @@ export default function Home() {
                     value={userId}
                     onChange={(e) => setUserId(e.target.value)}
                     placeholder="Enter user ID"
-                    className="flex-1"
+                    className="min-w-[300px]"
                   />
                   <Button onClick={generateRandomUserId} variant="outline" size="sm">
                     Random
                   </Button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Verification Threshold</label>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={threshold}
-                    onChange={(e) => setThreshold(parseFloat(e.target.value))}
-                    className="flex-1"
-                  />
-                  <span className="text-sm text-gray-500">({(threshold * 100).toFixed(0)}%)</span>
                 </div>
               </div>
             </div>
@@ -187,7 +180,6 @@ export default function Home() {
               <div className="flex justify-center">
                 <BiometricVerification
                   userId={userId}
-                  threshold={threshold}
                   onVerificationComplete={handleVerificationComplete}
                   continuousVerification={false}
                 />
@@ -213,7 +205,6 @@ export default function Home() {
               <div className="flex justify-center">
                 <BiometricVerification
                   userId={userId}
-                  threshold={threshold}
                   onVerificationComplete={handleVerificationComplete}
                   continuousVerification={true}
                   verificationInterval={3000}
@@ -231,6 +222,9 @@ export default function Home() {
           </p>
           <p>
             Face recognition powered by FaceNet | Voice recognition powered by ECAPA-TDNN
+          </p>
+          <p className="text-xs">
+            Dual-threshold verification system: Face ≥75% + Voice ≥70%
           </p>
         </div>
       </div>

@@ -75,7 +75,6 @@ async def verify_user(
     user_id: str = Form(...),
     face_image: UploadFile = File(...),
     voice_audio: UploadFile = File(...),
-    threshold: float = Form(default=settings.DEFAULT_SIMILARITY_THRESHOLD),
     storage: StorageService = Depends(get_storage_service),
     biometric: BiometricService = Depends(get_biometric_service)
 ):
@@ -83,10 +82,6 @@ async def verify_user(
     Verify user identity using face and voice biometrics
     """
     try:
-        # Validate threshold
-        if not 0.0 <= threshold <= 1.0:
-            raise HTTPException(status_code=400, detail="Threshold must be between 0.0 and 1.0")
-        
         # Get stored user enrollment
         enrollment = await storage.get_user_enrollment(user_id)
         if not enrollment:
@@ -121,20 +116,25 @@ async def verify_user(
         face_similarity = biometric.calculate_cosine_similarity(face_embedding, stored_face)
         voice_similarity = biometric.calculate_cosine_similarity(voice_embedding, stored_voice)
         
-        # Calculate combined score
-        combined_score = biometric.calculate_combined_score(face_similarity, voice_similarity)
-        
-        # Get separate thresholds from config
+        # Get thresholds from config
         face_threshold = settings.FACE_VERIFICATION_THRESHOLD
         voice_threshold = settings.VOICE_VERIFICATION_THRESHOLD
         
-        # Create verification attempt record with dual verification
+        # Determine if each biometric passes
+        face_verified = face_similarity >= face_threshold
+        voice_verified = voice_similarity >= voice_threshold
+        
+        # User is verified only if BOTH biometrics pass
+        verified = face_verified and voice_verified
+        
+        # Create verification attempt record
         verification = VerificationAttempt.create(
             user_id=user_id,
             face_similarity=face_similarity,
             voice_similarity=voice_similarity,
-            combined_score=combined_score,
-            threshold=threshold,
+            verified=verified,
+            face_verified=face_verified,
+            voice_verified=voice_verified,
             face_threshold=face_threshold,
             voice_threshold=voice_threshold
         )
@@ -143,15 +143,13 @@ async def verify_user(
         verification_id = await storage.save_verification_attempt(verification)
         
         return VerificationResponse(
-            status="success" if verification.verified else "failed",
-            verified=verification.verified,
+            status="success" if verified else "failed",
+            verified=verified,
             face_similarity=face_similarity,
             voice_similarity=voice_similarity,
-            combined_score=combined_score,
-            threshold=threshold,
             verification_id=verification_id,
-            face_verified=verification.face_verified,
-            voice_verified=verification.voice_verified,
+            face_verified=face_verified,
+            voice_verified=voice_verified,
             face_threshold=face_threshold,
             voice_threshold=voice_threshold
         )

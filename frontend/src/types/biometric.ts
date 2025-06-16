@@ -15,7 +15,6 @@ export interface BiometricVerificationRequest {
   user_id: string;
   face_image: File;
   voice_audio: File;
-  threshold?: number;
 }
 
 export interface BiometricVerificationResponse {
@@ -24,8 +23,6 @@ export interface BiometricVerificationResponse {
   verified: boolean;
   face_similarity: number;
   voice_similarity: number;
-  combined_score: number;
-  threshold: number;
   verified_at: string;
   // Dual verification fields
   face_verified: boolean;
